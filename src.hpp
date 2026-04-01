@@ -114,6 +114,16 @@ private:
     void ensure_current_block_capacity(int n) {
         if (current_block_ && (current_block_->capacity - current_block_->used) >= n) return;
 
+        // Try to find any existing block with enough tail capacity.
+        for (auto it = blocks_.begin(); it != blocks_.end(); ++it) {
+            if (&(*it) == current_block_) continue;
+            int free_tail = it->capacity - it->used;
+            if (free_tail >= n) {
+                current_block_ = &(*it);
+                return;
+            }
+        }
+
         // Try to find an empty block we can reuse or free it if too small.
         for (auto it = blocks_.begin(); it != blocks_.end(); ) {
             bool is_empty = (it->active == 0 && it->used == 0 && it->segments.empty());
