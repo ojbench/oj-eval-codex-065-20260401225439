@@ -112,23 +112,42 @@ private:
     };
 
     void ensure_current_block_capacity(int n) {
-        if (!current_block_ || (current_block_->capacity - current_block_->used) < n) {
-            // Not enough tail space in current block, obtain new block with sufficient capacity.
-            const int bsz = block_size_ints();
-            int needed_blocks = (n + bsz - 1) / bsz; // ceil
-            if (needed_blocks <= 0) needed_blocks = 1;
-            int* base = getNewBlock(needed_blocks);
+        if (current_block_ && (current_block_->capacity - current_block_->used) >= n) return;
 
-            Block newblk;
-            newblk.base = base;
-            newblk.blocks_n = needed_blocks;
-            newblk.capacity = needed_blocks * bsz;
-            newblk.used = 0;
-            newblk.active = 0;
-
-            blocks_.push_back(newblk);
-            current_block_ = &blocks_.back();
+        // Try to find an empty block we can reuse or free it if too small.
+        for (auto it = blocks_.begin(); it != blocks_.end(); ) {
+            bool is_empty = (it->active == 0 && it->used == 0 && it->segments.empty());
+            if (is_empty) {
+                if (it->capacity >= n) {
+                    current_block_ = &(*it);
+                    return; // Reuse this block
+                } else {
+                    // Free undersized empty blocks to avoid holding unused memory.
+                    freeBlock(it->base, it->blocks_n);
+                    bool was_current = (current_block_ == &(*it));
+                    it = blocks_.erase(it);
+                    if (was_current) current_block_ = nullptr;
+                    continue;
+                }
+            }
+            ++it;
         }
+
+        // No suitable reusable block, obtain a new block.
+        const int bsz = block_size_ints();
+        int needed_blocks = (n + bsz - 1) / bsz; // ceil
+        if (needed_blocks <= 0) needed_blocks = 1;
+        int* base = getNewBlock(needed_blocks);
+
+        Block newblk;
+        newblk.base = base;
+        newblk.blocks_n = needed_blocks;
+        newblk.capacity = needed_blocks * bsz;
+        newblk.used = 0;
+        newblk.active = 0;
+
+        blocks_.push_back(newblk);
+        current_block_ = &blocks_.back();
     }
 
     void shrink_block_tail(Block& blk) {
@@ -190,4 +209,3 @@ private:
     std::unordered_map<int*, MapVal> ptr_map_;
     std::vector<Ref> alloc_order_;
 };
-
