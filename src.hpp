@@ -23,8 +23,6 @@ public:
             freeBlock(blk.base, blk.blocks_n);
         }
         blocks_.clear();
-        alloc_order_.clear();
-        ptr_map_.clear();
     }
 
     int* allocate(int n) {
